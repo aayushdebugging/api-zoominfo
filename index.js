@@ -134,6 +134,67 @@ app.post('/search-candidates', async (req, res) => {
   }
 });
 
+/**
+ * POST /enrich-email
+ * Enriches multiple contacts using their email addresses
+ */
+app.post('/enrich-email', async (req, res) => {
+  const { emailAddresses } = req.body;
+
+  if (!emailAddresses || !Array.isArray(emailAddresses) || emailAddresses.length === 0) {
+    return res.status(400).json({ error: 'Missing or invalid emailAddresses array' });
+  }
+
+  try {
+    const accessToken = await authClient.getAccessTokenViaPKI(username, clientId, privateKey);
+
+    const matchPersonInput = emailAddresses.map(email => ({ emailAddress: email }));
+
+    const payload = {
+      matchPersonInput,
+      outputFields: [
+        "firstName",
+        "lastName",
+        "jobTitle",
+        "companyName",
+        "city",
+        "state",
+        "country",
+        "employmentHistory",
+        "externalUrls",
+        "email",
+        "hashedEmails",
+        "phone",
+        "mobilePhoneDoNotCall",
+        "education"
+      ]
+    };
+
+    const response = await fetch('https://api.zoominfo.com/enrich/contact', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!data?.data?.result?.length) {
+      return res.status(404).json({ error: 'No enrichment results found' });
+    }
+
+    const enrichedProfiles = data.data.result.map(entry => entry.data?.[0]).filter(Boolean);
+
+    res.json({ enrichedProfiles });
+  } catch (error) {
+    console.error('❌ Email enrichment failed:', error);
+    res.status(500).json({ error: 'Failed to enrich contacts by email' });
+  }
+});
+
+
 // Start Express server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
